@@ -1,0 +1,29 @@
+[project]
+name = "video_annotation"
+version = "0.1.0"
+description = "Pipeline to generate data to train a yolo"
+readme = "README.md"
+authors = [
+    { name = "Antoine Hanachowicz", email = "antoine.hanachowicz@outlook.com" },
+
+]
+requires-python = ">=3.12"
+
+
+dependencies = [
+  "opencv-contrib-python",
+  "numpy>=1.23",
+  "torch",
+  "torchvision",
+  "segment-anything @ git+https://github.com/facebookresearch/segment-anything.git"
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["my_pkg*"]
+exclude = ["data", "SAM_weight", "tests*"]
+
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
