@@ -1,74 +1,84 @@
 # Description
 
-Pipeline to ease the labellisation of a video using a tracker to automatize when the object doesn't change much between frames. 
+Pipeline to ease the labelling of a video using a tracker to automate annotation when the object doesn't change much between frames.
 
-## Problematic 
+## Problematic
 
-Labellisation cost a lot both in time and in money then the data has to remain in the company for some reason.
+Labelling costs a lot in both time and money, and the data often has to remain within the company for confidentiality reasons.
 
-When the goal is just labelling few videos you might want a tool you can tune to adapt to your issues. 
+When the goal is to label only a few videos, you might want a lightweight tool you can tune and adapt to your needs.
 
 ## My approach
 
-### Idea 
-The goal is to semi automate the collect, sometimes the objet keep its orientation, size and region in the video thus allow 
-the objet to be tracked with a simple tracker. Moreover, to be sure to fit the objet perfectly it could be nice to have a 
-model that segment the image allowing you to just click on the right bounding box starting the tracking that is why i chose to implement SAM vitB. 
+### Idea
 
-### Difficulty 
+The goal is to semi-automate the data collection.  
+Sometimes, the object keeps its orientation, size, and position in the video, which allows it to be tracked with a simple tracker.  
+To ensure the bounding box fits the object accurately, it can be helpful to use a segmentation model.  
+This way, you can click on the right bounding box before starting the tracking.  
+For that reason, I chose to implement **SAM ViT-B**.
 
-I don't know if that was my machine but the latency was very bad using the SAM model
-(even the smaller one) and the prediction on my videos was not good (I think due to the quality mostly).
-All combine made the use of SAM impossible. 
+### Difficulty
 
-Also even if some tracker works better than others (MIL and KCF seemed to work on my video) the main issue is 
-that they can't adapt their predictions shape always the same rectangle size so if the target change its size in the video
-the label would not perfectly fit, which will result in mislabelling and maybe labelling a second time (worst case)
+On my machine, the latency was very high when using the SAM model (even the smallest one), and the predictions on my videos were poor — probably due to video quality.  
+Combined, these issues made SAM unusable.
 
-# Installation 
+Even though some trackers performed better than others (**MIL** and **KCF** worked best on my videos), the main issue is that they can't adapt the shape of their predictions — they always keep the same rectangle size.  
+If the target changes size in the video, the label won't fit perfectly, leading to mislabelling or even re-labelling (worst case).
 
-I advise to make a venv and install the dependency using
+## Installation
 
-```commandline
+I recommend creating a virtual environment and installing the dependencies using:
+
+```bash
 pip install .
 ```
 
-You can download the SAM weight using : 
+You can download the SAM weights with:
 
 ```commandline
 mkdir -p SAM_weight && wget https://dl.fbaipublicfiles.com/segment_anything/sam_vit_b_01ec64.pth -O SAM_weight/sam_vit_b_01ec64.pth
 ```
 
-# Use
+## Use
 
-Use [main.py](main.py) script by indicate your **video path**, the **type of tracker** you want and the **path of the saving dataset folder** 
+Use the [main.py](main.py) script by specifying your **video path**, the **type of tracker** you want, and the **path to the output dataset folder**.
 
-Then you can expand the windows to see better
+You can expand the window to see better.
 
-Indications are written at the bottom of the window to help you understand there some piece of explanation :
+Instructions are displayed at the bottom of the window. Here is a short explanation:
 
-1. There is 3 modes available: 
-   - **Navigation** : navigate in the video until you find what you are looking for. press 'n' for normal and 't' for tracking
-   - **Tracking** : when find press 't' to activate tracking. It will call SAM if activated to help you draw a good bounding box. If not activated just draw a bounding box and press enter. press 'b' to break if the tracker make bad predictions (it will delete teh last prediction (which was wrong))
-   - **Normal** : To just labellise the classical way. Draw a box on your target and press enter it will iterate the video. 'b' to break
+1. There are three available modes:
 
-2. There some parameters you can choose using the tracker bars:
-   - **Frame track bar** to navigate in the video 
-   - **Fps in tracking/10** to set the fps of the tracking the higher, the more difficult it will be to break when the tracker lose its target (you can change during tracking)
-   - **Using SAM** if 1 SAM will be call when activate the tracking else you will initiate the tracker manually
+   - **Navigation**: navigate in the video until you find what you need.  
+     Press `n` for normal navigation or `t` for tracking.
 
+   - **Tracking**: once ready, press `t` to activate tracking.  
+     If SAM is activated, it will help you draw a bounding box.  
+     If not, draw the bounding box manually and press **Enter**.  
+     Press `b` to stop if the tracker starts making bad predictions (it will delete the last, wrong prediction).
 
-# Results
+   - **Normal**: label frames manually.  
+     Draw a box on your target and press **Enter** to save and go to the next frame.  
+     Press `b` to stop.
 
-I couldn't do a full pipeline: labelling a video only using SAM+Tracking and then training and testing a yolo, I didn't have enough time. 
+2. You can adjust several parameters using the trackbars:
 
-I think that if one find a better Segment tools (smaller latency) it could be a useful tool
+   - **Frame trackbar**: navigate through the video.  
+   - **FPS in tracking / 10**: sets the tracking speed.  
+     The higher it is, the harder it becomes to stop when the tracker loses the target (you can change this during tracking).  
+   - **Using SAM**: if set to 1, SAM will be called when tracking starts; otherwise, you must initialize the tracker manually.
 
-But I don't think that for now it's better than free open tools available.
+## Results
 
-# Futur work 
+I didn’t manage to complete a full pipeline — labelling a video with SAM + tracking and then training and testing a YOLO model — due to time constraints.
 
-It could be improved easily with some features :
+I believe that with a faster segmentation model (lower latency), this tool could become useful.  
+For now, though, it’s not more effective than freely available open-source tools.
 
-- Better segmentation tools (as we said) and like trackers the possibility to chose one (segmentor class from abstract class etc) 
-- A clic just on the segmentation prediction instead of a drawing on 
+## Future work
+
+It could be improved with additional features, such as:
+
+- Better segmentation models, with the ability to choose among several (via an abstract `Segmentor` class, for instance).  
+- The ability to start tracking by simply clicking on the segmentation output instead of manually drawing a bounding box.
