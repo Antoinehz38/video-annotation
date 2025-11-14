@@ -1,40 +1,63 @@
 import cv2
 import numpy as np
+from segment_anything import SamPredictor
 
 
 
-def sam_colorize(image_bgr, masks, alpha=0.5, draw_contours=True, draw_labels=True, top_k=None):
-    overlay = image_bgr.copy()
 
-    if isinstance(masks, list) and len(masks) and isinstance(masks[0], dict):
-        masks_sorted = sorted(masks, key=lambda m: m["area"], reverse=True)
-    else:
-        masks_sorted = masks
-    if top_k:
-        masks_sorted = masks_sorted[:top_k]
+def sam_bbox_from_click(predictor:SamPredictor,frame, clic_points, scale=2):
+    clic_points = np.asarray(clic_points, dtype=np.float32)
 
-    rng = np.random.default_rng(42)
-    colors = (rng.integers(0, 256, size=(len(masks_sorted), 3))).astype(np.uint8)
+    print(f'clic points = {clic_points}')
 
-    for i, m in enumerate(masks_sorted):
-        seg = m["segmentation"].astype(np.uint8) * 255  # HxW
-        color = colors[i].tolist()
+    # étendue des points
+    xmin = float(np.min(clic_points[:, 0]))
+    xmax = float(np.max(clic_points[:, 0]))
+    ymin = float(np.min(clic_points[:, 1]))
+    ymax = float(np.max(clic_points[:, 1]))
 
-        color_img = np.zeros_like(image_bgr)
-        color_img[:] = color
-        overlay = cv2.addWeighted(overlay, 1.0, cv2.bitwise_and(color_img, color_img, mask=seg), alpha, 0)
+    # centre
+    cx = (xmin + xmax) / 2
+    cy = (ymin + ymax) / 2
 
-        if draw_contours:
-            cnts, _ = cv2.findContours(seg, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-            cv2.drawContours(overlay, cnts, -1, (int(color[0]), int(color[1]), int(color[2])), 2)
+    # demi-taille du patch = écart max / 2 * scale
+    dx = xmax - xmin
+    dy = ymax - ymin
+    half = int(max(dx, dy) * scale / 2)
 
-        if draw_labels:
-            x, y, w_, h_ = m["bbox"]
-            label = f"id:{i} iou:{m.get('predicted_iou', 0):.2f}"
-            cv2.rectangle(overlay, (x, y), (x + w_, y + h_), (int(color[0]), int(color[1]), int(color[2])), 2)
-            t_size, _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)
-            cv2.rectangle(overlay, (x, y - t_size[1] - 6), (x + t_size[0] + 6, y), (int(color[0]), int(color[1]), int(color[2])), -1)
-            cv2.putText(overlay, label, (x + 3, y - 4), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0,0,0), 1, cv2.LINE_AA)
+    h, w = frame.shape[:2]
 
-    return overlay
+    # bornes du patch
+    x0 = max(int(cx - half), 0)
+    y0 = max(int(cy - half), 0)
+    x1 = min(int(cx + half), w)
+    y1 = min(int(cy + half), h)
+
+    # crop
+    crop_bgr = frame[y0:y1, x0:x1]
+    crop_rgb = cv2.cvtColor(crop_bgr, cv2.COLOR_BGR2RGB)
+    crop_rgb = np.ascontiguousarray(crop_rgb, dtype=np.uint8)
+
+    predictor.set_image(crop_rgb)
+
+    # point dans le repère du crop
+    point_coords = np.array([[cx - x0, cy - y0]], dtype=np.float32)
+    point_labels = np.array([1], dtype=np.int32)  # 1 = foreground
+
+    masks, scores, _ = predictor.predict(
+        point_coords=point_coords,
+        point_labels=point_labels,
+        multimask_output=False,
+    )
+
+    mask = masks[0].astype(np.uint8) * 255
+    x, y, bw, bh = cv2.boundingRect(mask)
+
+    # re-projeter dans l'image complète
+    x_full = x0 + x
+    y_full = y0 + y
+
+    cv2.imshow('chill', crop_bgr)
+
+    return (x_full, y_full, bw, bh)
 

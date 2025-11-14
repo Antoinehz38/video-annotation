@@ -2,16 +2,16 @@ import cv2, os, time
 import numpy as np
 from pathlib import Path
 from functools import partial
-from segment_anything import sam_model_registry, SamAutomaticMaskGenerator
+from segment_anything import sam_model_registry, SamPredictor
 
 import logging
 
 from tools.save_data import DataSaver
 from tools.trackers import get_tracker
-from tools.labelling_states.tracking_periode import tracking
+from tools.labelling_states.tracking_periode import tracking, get_area_to_sam, waiting_for_validation
 from tools.labelling_states.normal_periode import normal_labelling
 from tools.on_changes import on_change, on_change_fps, on_change_using_sam
-from tools.SAM import sam_colorize
+from tools.SAM import sam_bbox_from_click
 from tools.type_expectancy import State
 from tools.clean_video import clean_video
 from tools.display_info import update_info
@@ -34,10 +34,9 @@ def main(video_path: Path, tracker_mode: str = 'MIL', saving_path: str = './data
     state = State(seek=0, mode="nav", frame=None, fps_10=5, using_sam=False)
     data_saver = DataSaver(path_saving_folder=Path(saving_path))
     tracker = get_tracker(tracker_type=tracker_mode)
-    sam = sam_model_registry["vit_b"](checkpoint="./SAM_weight/sam_vit_b_01ec64.pth")
 
-    mask_gen = SamAutomaticMaskGenerator(sam, points_per_side=16, pred_iou_thresh=0.90, stability_score_thresh=0.96,
-                                         crop_n_layers=0, min_mask_region_area=400, )
+    sam = sam_model_registry["vit_b"](checkpoint="./SAM_weight/sam_vit_b_01ec64.pth")
+    predictor = SamPredictor(sam)
     callback = partial(on_change, cap, state)
 
     # Setup trackbars
@@ -66,13 +65,16 @@ def main(video_path: Path, tracker_mode: str = 'MIL', saving_path: str = './data
                                      0)
                 frame = state.frame.copy()
                 if state.using_sam:
-                    img_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                    img_rgb = np.ascontiguousarray(img_rgb, dtype=np.uint8)
-                    masks = mask_gen.generate(img_rgb)
-                    vis = sam_colorize(frame, masks, alpha=0.6, top_k=5)
-                    cv2.imshow("video", vis)
-                    bbox = cv2.selectROI("video", vis, fromCenter=False, showCrosshair=True)
+                    click_points = np.array(get_area_to_sam(frame))
+                    x_full, y_full, bw, bh = sam_bbox_from_click(predictor, frame,click_points)
+                    cv2.rectangle(frame, (x_full, y_full), (x_full + bw, y_full + bh), (0, 255, 0), 2)
+                    cv2.imshow("video", frame)
 
+                    validation = waiting_for_validation()
+                    if not validation:
+                        bbox = cv2.selectROI("video", frame, fromCenter=False, showCrosshair=True)
+                    else:
+                        bbox = (x_full, y_full, bw, bh)
                 else:
                     bbox = cv2.selectROI("video", frame, fromCenter=False, showCrosshair=True)
                 tracker = get_tracker(tracker_type=tracker_mode)  # previous tracker is no longer needed
